@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException
 from app.schemas.request import EmbeddingRequest, EmbeddingResponse
-from app.services.embedding import embeddingService
+from app.services.embedding import EmbeddingService
 
 router = APIRouter()
-embeddingService = embeddingService()
+embedding_service = EmbeddingService()
 
 
 @router.post("/embeddings", response_model=EmbeddingResponse)
@@ -11,10 +11,15 @@ async def generate_embeddings(request: EmbeddingRequest):
     """
     Generate embeddings from a PDF link
     """
-    pdfLink = request.pdf_url
+    pdf_link = request.pdf_url
     try:
-        extractedText = await embeddingService.downloadPdf(pdfLink)
-        # TODO: Implement PDF download and embedding generation
+        extracted_docs = await embedding_service.download_pdf(pdf_link)
+
+        chunks = embedding_service.split_text(extracted_docs)
+
+        embeddings = embedding_service.generate_embeddings(chunks)
+        await embedding_service.upload_chunks_to_db(chunks)
+
         return EmbeddingResponse(
             success=True,
             message="Embeddings generated successfully",
