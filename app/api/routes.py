@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from app.schemas.request import EmbeddingRequest, EmbeddingResponse
 from app.services.embedding import EmbeddingService
 
+
 router = APIRouter()
 embedding_service = EmbeddingService()
 
@@ -12,13 +13,14 @@ async def generate_embeddings(request: EmbeddingRequest):
     Generate embeddings from a PDF link
     """
     pdf_link = request.pdf_url
+    paper_id = request.paper_id
     try:
         extracted_docs = await embedding_service.download_pdf(pdf_link)
 
         chunks = embedding_service.split_text(extracted_docs)
 
         embeddings = embedding_service.generate_embeddings(chunks)
-        await embedding_service.upload_chunks_to_db(chunks)
+        await embedding_service.upload_chunks_to_db(chunks, paper_id)
 
         return EmbeddingResponse(
             success=True,

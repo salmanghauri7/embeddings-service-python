@@ -7,4 +7,5 @@ sentence-transformers
 uvicorn
 motor
 python-dotenv
+huggingface-hub
 langchain-text-splitters

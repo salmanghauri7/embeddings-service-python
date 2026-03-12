@@ -14,11 +14,9 @@ from sentence_transformers import SentenceTransformer
 class ChunkMetadata(BaseModel):
     page: Optional[int] = None
     totalPages: Optional[int] = Field(None, alias="total_pages")
-    chunk_length: Optional[int] = None
+    chunkLength: Optional[int] = None
 
 class ChunkDBItem(BaseModel):
-    workspaceId: str
-    userId: str
     paperId: Optional[str] = None
     content: str
     embedding: List[float]
@@ -38,7 +36,7 @@ class EmbeddingService: # Capitalized Class name (PEP 8 standard)
     async def download_pdf(self, pdf_link: str) -> list:
         pdf_url = str(pdf_link)
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             response = await client.get(pdf_url)
             response.raise_for_status()
 
@@ -49,6 +47,7 @@ class EmbeddingService: # Capitalized Class name (PEP 8 standard)
                 temp_path = tmp.name
 
             documents = []
+            full_text = ""
             with pymupdf.open(temp_path) as doc:
                 # Get global PDF metadata (Author, Title, etc.)
                 pdf_info = doc.metadata 
@@ -58,6 +57,7 @@ class EmbeddingService: # Capitalized Class name (PEP 8 standard)
                     content = page.get_text("text", sort=True)
                     
                     if content.strip(): # Only add if the page isn't empty
+                        full_text += "\n\n" + content
                         documents.append({
                             "content": content,
                             "metadata": {
@@ -66,6 +66,9 @@ class EmbeddingService: # Capitalized Class name (PEP 8 standard)
                             }
                         })
 
+            # Generate summary from the complete PDF text
+            await self.generate_summary_of_pdf(full_text)
+            
             return documents
         
         except Exception as e:
@@ -76,6 +79,43 @@ class EmbeddingService: # Capitalized Class name (PEP 8 standard)
         finally:
             if temp_path and os.path.exists(temp_path):
                 os.remove(temp_path)
+
+    async def generate_summary_of_pdf(self, content: str):
+        if not content.strip():
+            return ""
+
+        messages = [
+            {"role": "system", "content": settings.SUMMARY_PROMPT},
+            {"role": "user", "content": content},
+        ]
+
+        headers = {
+            "Authorization": f"Bearer {settings.HF_API_KEY}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "model": settings.SUMMARY_MODEL,
+            "messages": messages,
+            "stream": False,
+        }
+
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(
+                "https://router.huggingface.co/v1/chat/completions",
+                headers=headers,
+                json=payload,
+            )
+            response.raise_for_status()
+
+        data = response.json()
+
+        try:
+            return data["choices"][0]["message"]["content"].strip()
+        except (KeyError, IndexError, TypeError) as exc:
+            raise ValueError("Unexpected response format from Hugging Face chat completions") from exc
+
+
 
     def split_text(self, documents: list) -> list:
         """
@@ -123,7 +163,7 @@ class EmbeddingService: # Capitalized Class name (PEP 8 standard)
         return chunks # Returns the full list of dicts ready for Supabase
     
 
-    async def upload_chunks_to_db(self, chunks: list, workspace_id: str, user_id: str, paper_id: Optional[str] = None):
+    async def upload_chunks_to_db(self, chunks: list, paper_id: str):
         """
         Validates and uploads the processed chunks with their embeddings to MongoDB.
         """
@@ -140,8 +180,7 @@ class EmbeddingService: # Capitalized Class name (PEP 8 standard)
 
                 # Validate and parse the chunk data using Pydantic
                 item = ChunkDBItem(
-                    workspaceId=workspace_id,
-                    userId=user_id,
+                    
                     paperId=paper_id,
                     content=chunk["content"],
                     embedding=chunk["embedding"],
@@ -158,10 +197,7 @@ class EmbeddingService: # Capitalized Class name (PEP 8 standard)
             collection = db.get_collection("chunkembeddings")
             
             # Enforce indexes similarly to Mongoose
-            await collection.create_index(
-                [("workspaceId", 1), ("userId", 1)],
-                background=True
-            )
+        
             
             # Insert the generated chunks into MongoDB
             result = await collection.insert_many(validated_chunks)
