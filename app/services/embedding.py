@@ -9,6 +9,7 @@ from app.config import settings
 from app.db.database import db
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
+from bson import ObjectId
 
 # Schema definitions based on the Mongoose model
 class ChunkMetadata(BaseModel):
@@ -24,14 +25,20 @@ class ChunkDBItem(BaseModel):
     createdAt: datetime = Field(default_factory=datetime.utcnow)
 
 class EmbeddingService: # Capitalized Class name (PEP 8 standard)
-    def __init__(self):
+    def __init__(self, load_embedding_model: bool = True):
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200,
             length_function=len,
             separators=["\n\n", "\n", " ", ""]
         )
-        self.embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL)
+        self.embedding_model = None
+        if load_embedding_model:
+            self.embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL)
+
+    def _ensure_embedding_model(self):
+        if self.embedding_model is None:
+            self.embedding_model = SentenceTransformer(settings.EMBEDDING_MODEL)
 
     async def download_pdf(self, pdf_link: str) -> list:
         pdf_url = str(pdf_link)
@@ -66,10 +73,8 @@ class EmbeddingService: # Capitalized Class name (PEP 8 standard)
                             }
                         })
 
-            # Generate summary from the complete PDF text
-            await self.generate_summary_of_pdf(full_text)
-            
-            return documents
+            # We optionally return the full text so the API route can enqueue it
+            return documents, full_text
         
         except Exception as e:
             # Good to log the error for your FYP debugging
@@ -115,6 +120,23 @@ class EmbeddingService: # Capitalized Class name (PEP 8 standard)
         except (KeyError, IndexError, TypeError) as exc:
             raise ValueError("Unexpected response format from Hugging Face chat completions") from exc
 
+    async def upload_summary_to_db(self, paper_id: str, summary: str):
+        """
+        Placeholder for uploading the generated summary to the database.
+        You can create a new collection for summaries or update an existing paper document with the summary field.
+        """
+        try:
+            collection = db.get_collection("savedpapers")
+
+            result = await collection.update_one(
+                {"_id": ObjectId(paper_id)},
+                {"$set": {"summary": summary, "summaryGenerated": True}}
+            )
+            print(f"Summary upload result for paper_id {paper_id}: {result.raw_result}")
+            return result
+        except Exception as e:
+            print(f"Error uploading summary to database for paper_id {paper_id}: {e}")
+            raise
 
 
     def split_text(self, documents: list) -> list:
@@ -149,6 +171,8 @@ class EmbeddingService: # Capitalized Class name (PEP 8 standard)
         but i am thinking of using sentence-transformers/multi-qa-mpnet-base-dot-v1
         which is a bit larger but makes embeddings of 768 dimensions and is more accurate for question-answering tasks. I will experiment with both models and see which one works better for my use case.
         """
+        self._ensure_embedding_model()
+
         texts = [chunk["content"] for chunk in chunks]
 
         # 2. Encode EVERYTHING in one batch (No for-loop!)
