@@ -34,8 +34,45 @@ async def generate_pdf_summary_task(ctx, pdf_text: str, paper_id: str):
         print(f"Failed to generate summary for paper {paper_id}: {e}")
         raise e
 
+async def save_chat_messages_task(ctx, paper_id: str, user_id: str, question: str, answer: str):
+    """
+    Background task to save the chat messages (user's question and assistant's answer) to the database.
+    """
+    print(f"Background Task Started: Saving chat messages for paper {paper_id}")
+    try:
+        from bson import ObjectId
+        from datetime import datetime
+        collection = db.get_collection("conversations")
+        now = datetime.utcnow()
+        documents = [
+            {
+                "paperId": ObjectId(paper_id),
+                "userId": ObjectId(user_id),
+                "role": "user",
+                "message": question,
+                "createdAt": now,
+                "updatedAt": now
+            },
+            {
+                "paperId": ObjectId(paper_id),
+                "userId": ObjectId(user_id),
+                "role": "assistant",
+                "message": answer,
+                "createdAt": now,
+                "updatedAt": now
+            }
+        ]
+        await collection.insert_many(documents)
+        print(f"Successfully saved chat messages to database for paper {paper_id}")
+    except Exception as e:
+        print(f"Failed to save chat messages for paper {paper_id}: {e}")
+        raise e
+
 class WorkerSettings:
-    functions = [generate_pdf_summary_task]
+    functions = [generate_pdf_summary_task, save_chat_messages_task]
     redis_settings = RedisSettings(host='localhost', port=6379)
     on_startup = startup
     on_shutdown = shutdown
+
+
+# to run the worker, use the command: arq app.worker.WorkerSettings

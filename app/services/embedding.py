@@ -120,13 +120,53 @@ class EmbeddingService: # Capitalized Class name (PEP 8 standard)
         except (KeyError, IndexError, TypeError) as exc:
             raise ValueError("Unexpected response format from Hugging Face chat completions") from exc
 
+    async def generate_answer_from_context(self, question: str, context: str):
+        if not context.strip():
+            return "No context found to answer the question."
+
+        messages = [
+            {"role": "system", "content": "You are an expert AI assistant. Answer the user's question accurately using ONLY the provided context. If the context does not contain the answer, say so."},
+            {"role": "user", "content": f"Context:\n{context}\n\nQuestion:\n{question}"},
+        ]
+
+        headers = {
+            "Authorization": f"Bearer {settings.HF_API_KEY}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "model": settings.SUMMARY_MODEL,
+            "messages": messages,
+            "stream": False,
+        }
+
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(
+                "https://router.huggingface.co/v1/chat/completions",
+                headers=headers,
+                json=payload,
+            )
+            response.raise_for_status()
+
+        data = response.json()
+
+        try:
+            return data["choices"][0]["message"]["content"].strip()
+        except (KeyError, IndexError, TypeError) as exc:
+            raise ValueError("Unexpected response format from Hugging Face chat completions") from exc
+
     async def restructure_query(self, question: str, conversation_history: list = None):
         if not question.strip():
             return {"summary": False, "revised_question": ""}
 
         system_prompt = """You are an AI assistant helping to structure queries for a RAG (Retrieval-Augmented Generation) system.
 If the user's question asks for a general summary of the paper (e.g., "explain this paper", "what is this research about", "summarize the pdf"), set "summary" to true and leave "revised_question" empty.
-If it is a specific question, set "summary" to false and rewrite the user's question into a standalone, detailed "revised_question" using context from the conversation history, suitable for embedding search.
+If it is a specific question, set "summary" to false and rewrite the user's question into a highly optimized search query. 
+Crucially:
+1. Strip all conversational filler (e.g., "Can you explain", "What is", "Please tell me").
+2. Focus strictly on the core entities, keywords, and concepts. 
+3. Include relevant context from the conversation history if needed to make it standalone.
+For example, if the user asks "Can you explain what the main contribution of the paper is?", the revised_question should be something like "main contribution proposed method novelty".
 
 You MUST output strictly in JSON format matching this schema:
 {
@@ -140,7 +180,12 @@ Do not output any markdown code blocks or additional text."""
         ]
         
         if conversation_history:
-            messages.extend(conversation_history)
+            # Reformat incoming history into valid HF chat messages
+            for msg in conversation_history:
+                role = msg.get("role", "user")
+                # The backend might send the text in "message" (DB schema) or "content"
+                content = msg.get("message") or msg.get("content", "")
+                messages.append({"role": role, "content": content})
 
         messages.append({"role": "user", "content": question})
 
@@ -197,6 +242,20 @@ Do not output any markdown code blocks or additional text."""
             print(f"Error uploading summary to database for paper_id {paper_id}: {e}")
             raise
 
+    async def get_summary_from_db(self, paper_id: str):
+        """
+        Retrieves the generated summary for a given paper from the database.
+        """
+        try:
+            collection = db.get_collection("savedpapers")
+            document = await collection.find_one({"_id": ObjectId(paper_id)})
+            
+            if document and "summary" in document:
+                return document["summary"]
+            return None
+        except Exception as e:
+            print(f"Error fetching summary from database for paper_id {paper_id}: {e}")
+            raise
 
     def split_text(self, documents: list) -> list:
         """
