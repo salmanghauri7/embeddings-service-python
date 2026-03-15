@@ -11,3 +11,9 @@ class EmbeddingResponse(BaseModel):
     success: bool
     message: str
     embeddings: List[float]
+
+class chatRequest(BaseModel):
+    question: str
+    paper_id: str
+    user_id: str
+    conversation_history: Optional[List[dict]] = None

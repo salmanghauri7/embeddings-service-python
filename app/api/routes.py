@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from arq import create_pool
 from arq.connections import RedisSettings
-from app.schemas.request import EmbeddingRequest, EmbeddingResponse
+from app.schemas.request import EmbeddingRequest, EmbeddingResponse, chatRequest
 from app.services.embedding import EmbeddingService
 
 
@@ -51,3 +51,26 @@ async def generate_embeddings(request: EmbeddingRequest):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/paperChat")
+async def chat_with_paper(request: chatRequest):
+    '''
+    Chat with the paper using the question and paper_id to retrieve relevant chunks and generate a response.
+    '''
+    try:
+        structured_query = await embedding_service.restructure_query(
+            question=request.question,
+            conversation_history=request.conversation_history
+        )
+        
+        summary = structured_query.get("summary", False)
+        revised_question = structured_query.get("revised_question", "")
+
+        return {
+            "summary": summary,
+            "revised_question": revised_question
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+

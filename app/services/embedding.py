@@ -120,6 +120,65 @@ class EmbeddingService: # Capitalized Class name (PEP 8 standard)
         except (KeyError, IndexError, TypeError) as exc:
             raise ValueError("Unexpected response format from Hugging Face chat completions") from exc
 
+    async def restructure_query(self, question: str, conversation_history: list = None):
+        if not question.strip():
+            return {"summary": False, "revised_question": ""}
+
+        system_prompt = """You are an AI assistant helping to structure queries for a RAG (Retrieval-Augmented Generation) system.
+If the user's question asks for a general summary of the paper (e.g., "explain this paper", "what is this research about", "summarize the pdf"), set "summary" to true and leave "revised_question" empty.
+If it is a specific question, set "summary" to false and rewrite the user's question into a standalone, detailed "revised_question" using context from the conversation history, suitable for embedding search.
+
+You MUST output strictly in JSON format matching this schema:
+{
+  "summary": boolean,
+  "revised_question": "string"
+}
+Do not output any markdown code blocks or additional text."""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+        ]
+        
+        if conversation_history:
+            messages.extend(conversation_history)
+
+        messages.append({"role": "user", "content": question})
+
+        headers = {
+            "Authorization": f"Bearer {settings.HF_API_KEY}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "model": settings.SUMMARY_MODEL,
+            "messages": messages,
+            "stream": False,
+        }
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://router.huggingface.co/v1/chat/completions",
+                headers=headers,
+                json=payload,
+            )
+            response.raise_for_status()
+
+        data = response.json()
+
+        try:
+            content = data["choices"][0]["message"]["content"].strip()
+            import json
+            # Sanitize content in case the model returns markdown JSON blocks
+            if content.startswith("```json"):
+                content = content[7:-3].strip()
+            elif content.startswith("```"):
+                content = content[3:-3].strip()
+                
+            return json.loads(content)
+        except Exception as e:
+            print(f"Error parsing JSON from LLM: {e}")
+            return {"summary": False, "revised_question": question}
+
     async def upload_summary_to_db(self, paper_id: str, summary: str):
         """
         Placeholder for uploading the generated summary to the database.
