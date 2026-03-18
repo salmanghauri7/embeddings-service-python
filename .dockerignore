@@ -1,0 +1,29 @@
+# 1. Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.env
+.venv/
+env/
+venv/
+
+# 2. Docker & Git (Prevent recursion/leaking history)
+.git
+.gitignore
+Dockerfile
+.dockerignore
+
+# 3. OS-specific files
+.DS_Store
+thumbs.db
+
+# 4. Environment secrets (CRITICAL)
+.env
+.env.*
+!.env.example
+
+# 5. Local Development tools
+.vscode/
+.idea/
+*.swp

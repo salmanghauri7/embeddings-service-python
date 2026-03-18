@@ -9,3 +9,4 @@ motor
 python-dotenv
 huggingface-hub
 langchain-text-splitters
+arq

@@ -4,6 +4,7 @@ from arq.connections import RedisSettings
 from app.db.database import db
 from app.schemas.request import EmbeddingRequest, EmbeddingResponse, chatRequest
 from app.services.embedding import EmbeddingService
+from bson import ObjectId
 
 
 router = APIRouter()
@@ -91,7 +92,7 @@ async def chat_with_paper(request: chatRequest):
                         "numCandidates": 100,
                         "limit": 20,
                         "filter": {
-                            "paperId": request.paper_id # Pre-filters the vector search
+                            "paperId": request.paper_id
                         }
                     }
                 },
@@ -115,11 +116,13 @@ async def chat_with_paper(request: chatRequest):
                                         "query": revised_question,
                                         "path": "content"
                                     }
-                                },
+                                }
+                            ],
+                            "filter": [
                                 {
                                     "equals": {
                                         "value": request.paper_id,
-                                        "path": "paperId" # Filters the keyword search
+                                        "path": "paperId"
                                     }
                                 }
                             ]
@@ -169,7 +172,7 @@ async def chat_with_paper(request: chatRequest):
             answer = await embedding_service.generate_answer_from_context(question=revised_question, context=context)
 
             if redis_pool:
-                await redis_pool.enqueue_job("save_chat_messages_task", request.paper_id, request.user_id, revised_question, answer)
+                await redis_pool.enqueue_job("save_chat_messages_task", request.paper_id, request.user_id, request.question, answer)
 
             return {"answer": answer, "results": [str(d) for d in results]}
     except Exception as e:

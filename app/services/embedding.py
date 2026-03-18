@@ -122,12 +122,15 @@ class EmbeddingService: # Capitalized Class name (PEP 8 standard)
 
     async def generate_answer_from_context(self, question: str, context: str):
         if not context.strip():
-            return "No context found to answer the question."
-
-        messages = [
-            {"role": "system", "content": "You are an expert AI assistant. Answer the user's question accurately using ONLY the provided context. If the context does not contain the answer, say so."},
-            {"role": "user", "content": f"Context:\n{context}\n\nQuestion:\n{question}"},
-        ]
+            messages = [
+                {"role": "system", "content": "You are a helpful AI research assistant. The user asked a question, but no relevant context was found in the paper they provided. Answer their question based on your general knowledge, but explicitly mention that your answer is not based on the paper."},
+                {"role": "user", "content": f"Question:\n{question}"},
+            ]
+        else:
+            messages = [
+                {"role": "system", "content": "You are an expert AI research assistant. Answer the user's question accurately using the provided context. If the context does not contain the answer, you can supplement with your general knowledge, but clearly distinguish what is from the paper and what is from your own knowledge."},
+                {"role": "user", "content": f"Context:\n{context}\n\nQuestion:\n{question}"},
+            ]
 
         headers = {
             "Authorization": f"Bearer {settings.HF_API_KEY}",
