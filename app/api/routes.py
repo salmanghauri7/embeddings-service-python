@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from arq import create_pool
 from arq.connections import RedisSettings
+import os
 from app.db.database import db
 from app.schemas.request import EmbeddingRequest, EmbeddingResponse, chatRequest
 from app.services.embedding import EmbeddingService
@@ -17,7 +18,8 @@ redis_pool = None
 async def startup_event():
     global redis_pool
     # Initialize connection to Redis for the ARQ worker queue
-    redis_pool = await create_pool(RedisSettings(host='localhost', port=6379))
+    redis_host = os.getenv("REDIS_HOST", "redis")
+    redis_pool = await create_pool(RedisSettings(host=redis_host, port=6379))
 
 @router.post("/embeddings", response_model=EmbeddingResponse)
 async def generate_embeddings(request: EmbeddingRequest):

@@ -1,7 +1,6 @@
 from arq.connections import RedisSettings
 from app.services.embedding import EmbeddingService
 from app.db.database import db
-from app.config import settings
 import os
 
 async def startup(ctx):
@@ -71,8 +70,8 @@ async def save_chat_messages_task(ctx, paper_id: str, user_id: str, question: st
 class WorkerSettings:
     functions = [generate_pdf_summary_task, save_chat_messages_task]
 
-    redis_url = os.getenv('REDIS_URL', 'localhost')
-    redis_settings = RedisSettings(host=redis_url, port=6379)
+    redis_host = os.getenv("REDIS_HOST", "redis")
+    redis_settings = RedisSettings(host=redis_host, port=6379)
     on_startup = startup
     on_shutdown = shutdown
 
