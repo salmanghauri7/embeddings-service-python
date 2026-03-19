@@ -15,4 +15,5 @@ __pycache__/
 .env
 venv
 
+api-testing
 .vscode/

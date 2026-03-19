@@ -1,0 +1,10 @@
+GET http://localhost:8000/
+
+
+POST http://localhost:8000/api/v1/embeddings
+Content-Type: application/json
+
+{
+  "pdf_url": "http://arxiv.org/pdf/2406.12934v1",
+  "paper_id": "69b84421361909cb1776c1ad"
+}
