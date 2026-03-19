@@ -71,7 +71,8 @@ class WorkerSettings:
     functions = [generate_pdf_summary_task, save_chat_messages_task]
 
     redis_host = os.getenv("REDIS_HOST", "redis")
-    redis_settings = RedisSettings(host=redis_host, port=6379)
+    redis_port = int(os.getenv("REDIS_PORT", "6379"))
+    redis_settings = RedisSettings(host=redis_host, port=redis_port)
     on_startup = startup
     on_shutdown = shutdown
 

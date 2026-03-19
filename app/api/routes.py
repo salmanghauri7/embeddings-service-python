@@ -17,9 +17,15 @@ redis_pool = None
 @router.on_event("startup")
 async def startup_event():
     global redis_pool
-    # Initialize connection to Redis for the ARQ worker queue
+    # Initialize Redis for ARQ queue, but do not fail API startup if Redis is unavailable.
     redis_host = os.getenv("REDIS_HOST", "redis")
-    redis_pool = await create_pool(RedisSettings(host=redis_host, port=6379))
+    redis_port = int(os.getenv("REDIS_PORT", "6379"))
+    try:
+        redis_pool = await create_pool(RedisSettings(host=redis_host, port=redis_port))
+        print(f"Connected to Redis queue at {redis_host}:{redis_port}")
+    except Exception as exc:
+        redis_pool = None
+        print(f"Redis unavailable ({redis_host}:{redis_port}): {exc}. Continuing without background queue.")
 
 @router.post("/embeddings", response_model=EmbeddingResponse)
 async def generate_embeddings(request: EmbeddingRequest):
