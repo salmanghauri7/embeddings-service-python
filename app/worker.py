@@ -70,8 +70,8 @@ async def save_chat_messages_task(ctx, paper_id: str, user_id: str, question: st
 class WorkerSettings:
     functions = [generate_pdf_summary_task, save_chat_messages_task]
 
-    redis_host = os.getenv("REDIS_HOST", "redis")
-    redis_port = int(os.getenv("REDIS_PORT", "6379"))
+    redis_host = os.getenv("REDIS_HOST", "127.0.0.1").strip()
+    redis_port = int(os.getenv("REDIS_PORT", "6379").strip())
     redis_settings = RedisSettings(host=redis_host, port=redis_port)
     on_startup = startup
     on_shutdown = shutdown
