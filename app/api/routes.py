@@ -78,10 +78,19 @@ async def chat_with_paper(request: chatRequest):
 
         if summary:
             # If the user asked for a summary, fetch it from the savedpapers collection
-            paper_summary = await embedding_service.get_summary_from_db(request.paperId)
+            paper_summary = await embedding_service.get_summary_from_db(request.paper_id)
             
             if not paper_summary:
                 return {"answer": "Summary is currently being generated or not available. Please try again later."}
+
+            if redis_pool:
+                await redis_pool.enqueue_job(
+                    "save_chat_messages_task",
+                    request.paper_id,
+                    request.user_id,
+                    request.question,
+                    paper_summary
+                )
             
             return {"answer": paper_summary}
         else:

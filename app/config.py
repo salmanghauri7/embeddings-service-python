@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     # Service Configuration
     SERVICE_NAME: str = "Embeddings Service"
     VERSION: str = "1.0.0"
+
+    # Redis Configuration
+    REDIS_HOST: str = "127.0.0.1"
+    REDIS_PORT: int = 6379
     
     # Model Configuration
     EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
